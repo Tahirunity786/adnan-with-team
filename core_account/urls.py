@@ -1,5 +1,5 @@
 from django.urls import path
-from core_account.views import (ChangePasswordAccount,TurnOffTwoFactorAuth, CreateUserView, DeactvateAccount, ForgotPassword, GoogleAuthAPIView, GetNewOtp, ResetPassword, VerifyOtp, SocialLoginView, UserLogin, UserSearchView, MutePeopleView, BlockedPeopleView, MakeaccoutPrivate)
+from core_account.views import (ChangePasswordAccount,TurnOffTwoFactorAuth, CreateUserView, DeactvateAccount, ForgotPassword, GoogleAuthAPIView, GetNewOtp, ResetPassword, VerifyOtp, UserLogin, UserSearchView, MutePeopleView, BlockedPeopleView, MakeaccoutPrivate)
 from core_account.views import verify_2fa, enable_2fa, catch_and_enable_2fa
 urlpatterns = [
     # Endpoint for Google authentication
@@ -18,9 +18,6 @@ urlpatterns = [
 
     # Endpoint for verifying OTP during user registration
     path("public/u/auth/verify", VerifyOtp.as_view(), name="new-user-verify"),
-
-    # Endpoint for Facebook OAuth authentication
-    path('public/oauth/facebook', SocialLoginView.as_view(), name="new-user-facebook"),
 
     # Endpoint for searching user accounts
     path('public/u/search/account', UserSearchView.as_view(), name='search-account'),

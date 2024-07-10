@@ -32,6 +32,8 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -41,7 +43,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'core_account.apps.CoreAccountConfig',
     'core_profile.apps.CoreProfileConfig',
-    'core_post.apps.CorePostConfig'
+    'core_post.apps.CorePostConfig',
+    'core_messaging.apps.CoreMessagingConfig',
 ]
 
 MIDDLEWARE = [
@@ -52,7 +55,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'social_django.middleware.SocialAuthExceptionMiddleware'
 ]
 
 ROOT_URLCONF = 'processor.urls'
@@ -73,7 +75,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'processor.wsgi.application'
+ASGI_APPLICATION = 'processor.asgi.application'
 
 DATABASES = {
     # 'default': {
@@ -152,43 +154,31 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=360),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=365),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=40),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=40),
 }
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'usmanunity786@gmail.com'
-EMAIL_HOST_PASSWORD = 'twdwhwazvxothmbi'
 
+CHANNEL_LAYERS = {
+    'default' : {
+        'BACKEND' : 'channels.layers.InMemoryChannelLayer',
+    }
+}
 
-# Facebook configuration
-SOCIAL_AUTH_FACEBOOK_KEY =os.getenv('FACEBOOK_KEY')
-SOCIAL_AUTH_FACEBOOK_SECRET = os.getenv('FACEBOOK_SECRET')
-
-
-
-SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/'
-# Define SOCIAL_AUTH_FACEBOOK_SCOPE to get extra permissions from facebook. Email is not sent by default, to get it, you must request the email permission:
-SOCIAL_AUTH_FACEBOOK_SCOPE = ['email']
-SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {
-'fields': 'id, name, email' }
-SOCIAL_AUTH_FACEBOOK_SCOPE = ['email']
-FACEBOOK_EXTENDED_PERMISSIONS = ['email']
-SOCIAL_AUTH_ADMIN_USER_SEARCH_FIELDS = ['username', 'first_name', 'email']
-SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = True
-SOCIAL_AUTH_PIPELINE = (
-'social_core.pipeline.social_auth.social_details',
-'social_core.pipeline.social_auth.social_uid',
-'social_core.pipeline.social_auth.auth_allowed',
-'social_core.pipeline.social_auth.social_user',
-'social_core.pipeline.user.get_username',
-'social_core.pipeline.social_auth.associate_by_email',
-'social_core.pipeline.user.create_user',
-'social_core.pipeline.social_auth.associate_user',
-'social_core.pipeline.social_auth.load_extra_data',
-'social_core.pipeline.user.user_details', )
-
-BREVO_API=os.getenv('BREVO_API')
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}

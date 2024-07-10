@@ -3,7 +3,7 @@ from core_account.manager import CustomUserManager
 from django.contrib.auth.models import AbstractUser,Group, Permission
 from django.utils.text import slugify
 import uuid
-
+import random
 class interest(models.Model):
     interests = models.CharField(max_length=200, default="", db_index=True)
 
@@ -33,6 +33,7 @@ class User(AbstractUser):
     )
 
     # General Information about the user
+    _id = models.CharField(max_length=50,db_index=True, default=None)
     profile = models.ImageField(upload_to="profile/images", blank=True, null=True)  # User's profile picture
     profile_slug = models.SlugField(unique=True, default='')  # Slug field for user's profile
     profile_info = models.CharField(max_length=100, null=True, blank=True)  # Additional profile information
@@ -82,5 +83,6 @@ class User(AbstractUser):
         """
         self.profile_slug = slugify(self.username)
         self.profile_slug += f"-{uuid.uuid4().hex[:8]}"
+        self._id = f"{random.randint(10000, 100000)}-{uuid.uuid4().hex[:4]}"
         super().save(*args, **kwargs)
 

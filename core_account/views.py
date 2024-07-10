@@ -16,30 +16,31 @@ from google.auth.transport import requests
 from google.oauth2.id_token import verify_oauth2_token
 import requests as efwe
 from django.core.files.base import ContentFile
-from requests.exceptions import HTTPError
+# from requests.exceptions import HTTPError
 from rest_framework import generics
-from social_django.utils import load_strategy, load_backend
-from social_core.backends.oauth import BaseOAuth2
-from social_core.exceptions import MissingBackend, AuthTokenError, AuthForbidden
+# from social_django.utils import load_strategy, load_backend
+# from social_core.backends.oauth import BaseOAuth2
+# from social_core.exceptions import MissingBackend, AuthTokenError, AuthForbidden
 from django.contrib.auth import get_user_model
 from core_account.token import get_tokens_for_user
-from core_account.utiles import send_otp_email, get_user_by_identifier
+from core_account.utiles import rest_password_otp, send_otp_email, get_user_by_identifier
 from core_account.utiles import generate_otp
-from django.contrib.auth import login, authenticate
+from django.contrib.auth import authenticate
 from core_account.serializers import ForgotPasswordSerializer, UserSerializer, ResetPasswordSerializer
 from django.contrib.auth.hashers import make_password
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import default_token_generator
+# from django.contrib.auth.tokens import default_token_generator
 from django.utils.translation import gettext as _
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.urls import reverse
+# from django.template.loader import render_to_string
+# from django.urls import reverse
 from rest_framework.decorators import api_view
-
+from django.utils import timezone
+from datetime import timedelta
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from core_account.serializers import (
     CreateUserSerializer,
-    SocialSerializer,
+    # SocialSerializer,
 )
 
 User = get_user_model()
@@ -58,23 +59,21 @@ class CreateUserView(APIView):
             interest_names = [interest_obj.interests for interest_obj in interests_data]
             account.Interest.add(*interests_data)
 
-            # Generate OTP
+            #Generate OTP
             otp = generate_otp()
-            
+
             send_otp_email(account, otp)
-           
+
             account.otp = otp
             account.save()
-            
-           
+
+
 
             response_data = {
-                'response': 'Account has been created',
-                'id': account.id,
-                'username': account.username,
-                'email': account.email,
-                'interests': interest_names,
-                
+                'response': f'Account has been created, An Otp has send to {account.email}',
+                'id': account._id,
+
+
             }
 
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -125,7 +124,7 @@ class UserLogin(APIView):
         interests = list(authenticated_user.Interest.all().values_list('interests', flat=True))
 
         user_data = {
-            "user_id": authenticated_user.id,
+            "user_id": authenticated_user._id,
             "username": authenticated_user.username,
             "profile": profile_url,
             "fullname": authenticated_user.full_name,
@@ -202,7 +201,7 @@ class GoogleAuthAPIView(APIView):
             # Construct response data
             response_data = {
                 'response': 'Account Created' if created else 'Account Logged In',
-                'id': user.id,
+                'id': user._id,
                 'username': user.username,
                 'profile_image': user.profile.url if user.profile else None,
                 'email': user.email,
@@ -262,7 +261,7 @@ class VerifyOtp(APIView):
                     usr = User.objects.get(email=username)
                 else:
                     usr = User.objects.get(username=username)
-
+                
                 # Check if the OTP matches
                 if str(usr.otp) == otp:
                     current_time = datetime.datetime.now().time()
@@ -322,9 +321,9 @@ class GetNewOtp(APIView):
         """
         try:
             # Extracting the username or email from the request data
-            query = request.data.get('username')
+            query = request.data.get('email')
             usr = get_user_by_identifier(query)
-
+            print(usr)
             if usr is None:
                 # If user is not found, return a 400 Bad Request response with a relevant message
                 return Response(status=status.HTTP_400_BAD_REQUEST, data={"message": "User with provided credentials not found"})
@@ -335,12 +334,13 @@ class GetNewOtp(APIView):
                 return Response(status=status.HTTP_400_BAD_REQUEST, data={"message": "Otp Limit Ended, please try with another email!"})
 
             # Sending a new OTP for account verification via email
-            subject = 'Account Verification: Social Media'
+            
             otp = generate_otp()
-            message = f'Your Account is created, please verify with this OTP {otp}. Otp will expire within 5 minutes.'
-
+            
             # Assign the generated OTP to the user instance
+            print(usr.otp)
             usr.otp = otp
+            print("After",usr.otp)
 
             # Incrementing OTP limit if it's not None
             if usr.otp_limit is not None:
@@ -351,59 +351,59 @@ class GetNewOtp(APIView):
 
             usr.save()  # Saving the updated user instance
             # Send the OTP email to the user
-            send_otp_email(usr, subject, message)
+            # send_otp_email(usr, otp)
 
             return Response(status=status.HTTP_200_OK, data={"message": f"Otp sent to {usr.email}"})
         except Exception as e:
             # Catch any exceptions that occur during the process and return a 400 Bad Request response with a generic error messag
-            return Response(status=status.HTTP_400_BAD_REQUEST, data={"message": f"An error occurred while processing the request"})
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={"message": f"An error occurred while processing the request {e}"})
 
 
-class SocialLoginView(generics.GenericAPIView):
-    """Log in using Facebook"""
+# class SocialLoginView(generics.GenericAPIView):
+#     """Log in using Facebook"""
 
-    # Assuming SocialSerializer is defined elsewhere
-    serializer_class = SocialSerializer
-    permission_classes = [AllowAny]
+#     # Assuming SocialSerializer is defined elsewhere
+#     serializer_class = SocialSerializer
+#     permission_classes = [AllowAny]
 
-    def post(self, request):
-        """Authenticate user through the provider and access_token"""
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        provider = serializer.validated_data.get(
-            'provider')  # Use validated_data instead of data
-        access_token = serializer.validated_data.get(
-            'access_token')  # Use validated_data instead of data
+#     def post(self, request):
+#         """Authenticate user through the provider and access_token"""
+#         serializer = self.serializer_class(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         provider = serializer.validated_data.get(
+#             'provider')  # Use validated_data instead of data
+#         access_token = serializer.validated_data.get(
+#             'access_token')  # Use validated_data instead of data
 
-        strategy = load_strategy(request)
+#         strategy = load_strategy(request)
 
-        try:
-            backend = load_backend(
-                strategy=strategy, name=provider, redirect_uri=None)
-        except MissingBackend:
-            return Response({'error': 'Please provide a valid provider'}, status=status.HTTP_400_BAD_REQUEST)
+#         try:
+#             backend = load_backend(
+#                 strategy=strategy, name=provider, redirect_uri=None)
+#         except MissingBackend:
+#             return Response({'error': 'Please provide a valid provider'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            if isinstance(backend, BaseOAuth2):
-                user = backend.do_auth(access_token)
-        except (HTTPError, AuthTokenError, AuthForbidden) as error:
-            return Response({'error': 'Invalid credentials', 'details': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+#         try:
+#             if isinstance(backend, BaseOAuth2):
+#                 user = backend.do_auth(access_token)
+#         except (HTTPError, AuthTokenError, AuthForbidden) as error:
+#             return Response({'error': 'Invalid credentials', 'details': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if user and user.is_active:
-            # Generate JWT token
-            login(request, user)
-            # Assuming get_tokens_for_user is defined elsewhere
-            token = get_tokens_for_user(user)
+#         if user and user.is_active:
+#             # Generate JWT token
+#             login(request, user)
+#             # Assuming get_tokens_for_user is defined elsewhere
+#             token = get_tokens_for_user(user)
 
-            # Customize the response
-            response_data = {
-                'email': user.email,
-                'username': user.username,
-                'token': token
-            }
-            return Response(response_data, status=status.HTTP_200_OK)
+#             # Customize the response
+#             response_data = {
+#                 'email': user.email,
+#                 'username': user.username,
+#                 'token': token
+#             }
+#             return Response(response_data, status=status.HTTP_200_OK)
 
-        return Response({'error': 'Failed to authenticate user'}, status=status.HTTP_400_BAD_REQUEST)
+#         return Response({'error': 'Failed to authenticate user'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserSearchView(generics.ListAPIView):
@@ -624,6 +624,7 @@ class ForgotPassword(APIView):
     """
     API endpoint to handle forgot password functionality.
     """
+    permission_classes = [AllowAny]
 
     def post(self, request):
         """
@@ -638,42 +639,31 @@ class ForgotPassword(APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         if serializer.is_valid():
             user_email = serializer.validated_data['email']
-            user = User.objects.filter(email=user_email).first()
-            if user:
+
+            try:
+                user = User.objects.get(email=user_email)
                 # Generate a password reset token
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
-                token = default_token_generator.make_token(user)
+                token = PasswordResetTokenGenerator().make_token(user)
 
-                # Create password reset link
-                reset_link = request.build_absolute_uri(
-                    reverse('reset_password', kwargs={
-                            'uidb64': uid, 'token': token})
-                )
+                # Create password reset link for React application
+                frontend_url = 'http://localhost:3003/reset-password'
+                reset_link = f"{frontend_url}?uid={uid}&token={token}"
 
                 # Send password reset email
-                subject = _('Password Reset Request')
-                message = f"Please click the following link to reset your password: {reset_link}"
-                from_email = settings.EMAIL_HOST_USER
-                to_email = user_email
-                send_mail(subject, message, from_email, [to_email])
+                rest_password_otp(user, reset_link)
 
                 return Response({'detail': _('Password reset email has been sent.')}, status=status.HTTP_200_OK)
-            else:
+            except User.DoesNotExist:
                 return Response({'error': _('User with this email does not exist.')}, status=status.HTTP_404_NOT_FOUND)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class ResetPassword(APIView):
     """
     API endpoint to handle resetting password.
     """
-    # def get(request):
-    #     """_summary_
-
-    #     Here you will able to add rest_password_page
-    #     """
-    #     pass
+    permission_classes = [AllowAny]
 
     def post(self, request, uidb64, token):
         """
@@ -691,8 +681,14 @@ class ResetPassword(APIView):
             except (TypeError, ValueError, OverflowError, User.DoesNotExist):
                 user = None
 
-            # Check if user is valid
-            if user is not None and default_token_generator.check_token(user, token):
+            # Check if user is valid and token is not expired
+            token_generator = PasswordResetTokenGenerator()
+            if user is not None and token_generator.check_token(user, token):
+                # Check if token is expired (30 minutes)
+                token_created_at = token_generator._get_token_with_timestamp(user)[1]
+                if timezone.now() > token_created_at + timedelta(minutes=30):
+                    return Response({'error': _('The reset link has expired.')}, status=status.HTTP_400_BAD_REQUEST)
+
                 # Set new password
                 user.set_password(new_password)
                 user.save()
@@ -701,6 +697,62 @@ class ResetPassword(APIView):
                 return Response({'error': _('Invalid user or token.')}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def verify_2fa(request):
+    """
+    Verify two-factor authentication (2FA) for user login.
+
+    Args:
+        request: Django request object containing user email and OTP.
+
+    Returns:
+        Response: JSON response indicating login success or failure.
+    """
+
+    if request.method != "POST":
+        return Response({"Error": "Only POST method allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    email = request.data.get('email')
+    otp = request.data.get('otp')
+
+    # Check if email and OTP are provided
+    if not email:
+        return Response({"Error": "Email not provided"}, status=status.HTTP_400_BAD_REQUEST)
+    if not otp:
+        return Response({"Error": "OTP not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({"Error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"Error": f"Error retrieving user: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Check if provided OTP matches user's OTP
+    if str(user.otp) != otp:
+        return Response({"Error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if OTP is expired
+    current_time = datetime.datetime.now().time()
+    if (current_time.minute - user.otp_delay.minute) > 5:
+        return Response({"Error": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Generate system token and prepare user data for response
+    sys_token = get_tokens_for_user(user)
+    profile_url = settings.BACKEND + user.profile.url if user.profile else None
+    user_data = {
+        "user_id": user.id,
+        "username": user.username,
+        "profile": profile_url,
+        "fullname": user.full_name,
+        "info": user.profile_info if user.profile_info else None,
+        "token": sys_token,
+        "two-factor-auth":user.two_factor_auth
+
+    }
+
+    return Response({"Success": "Logged in", "user": user_data}, status=status.HTTP_202_ACCEPTED)
 
 @api_view(['POST'])
 def verify_2fa(request):
